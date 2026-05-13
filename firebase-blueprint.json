@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "news": {
+      "title": "News Article",
+      "description": "A news article with a title, content, and optional audio link.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The title of the news article."
+        },
+        "content": {
+          "type": "string",
+          "description": "The main content of the news article (supports HTML)."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "Optional URL to an image for the news article."
+        },
+        "audio": {
+          "type": "string",
+          "description": "Optional URL to an audio file."
+        },
+        "time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of when the article was created or updated."
+        }
+      },
+      "required": ["title", "content", "time"]
+    }
+  },
+  "firestore": {
+    "news": {
+      "schema": { "$ref": "#/entities/news" },
+      "description": "Collection of news articles."
+    }
+  }
+}

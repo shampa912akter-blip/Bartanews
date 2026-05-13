@@ -1,0 +1,6 @@
+{
+  "name": "BartaNews",
+  "description": "A real-time news application with a password-protected admin panel and real-time updates.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
