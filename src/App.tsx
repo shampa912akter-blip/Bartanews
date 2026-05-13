@@ -81,6 +81,9 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesisUtterance | null>(null);
+
   // Sync activeNewsId with URL params on mount
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -115,14 +118,16 @@ export default function App() {
     return () => {
       authUnsubscribe();
       newsUnsubscribe();
+      window.speechSynthesis.cancel();
     };
   }, []);
 
   const handleGoogleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed", error);
+      alert(`লগইন ব্যর্থ হয়েছে: ${error.message}\n\nপরামর্শ: Firebase Console-এ আপনার ডোমেইনটি (github.io) Authorized Domains-এ যুক্ত করেছেন কি?`);
     }
   };
 
@@ -165,7 +170,7 @@ export default function App() {
   const handleLogoClick = () => {
     if (activeNewsId) {
       setActiveNewsId(null);
-      window.history.pushState({}, '', window.location.origin);
+      window.history.pushState({}, '', window.location.pathname);
       return;
     }
     
@@ -326,17 +331,21 @@ export default function App() {
 
     setLoading(true);
     try {
-      const q = query(
-        collection(db, 'news'), 
-        where('title', '>=', searchQuery),
-        where('title', '<=', searchQuery + '\uf8ff')
-      );
+      // For more complex searches (like content search), client-side filtering after fetching is better 
+      // since Firestore doesn't support substring/contains search across multiple fields well.
+      const q = query(collection(db, 'news'), orderBy('time', 'desc'));
       const snapshot = await getDocs(q);
       const items = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as NewsItem[];
-      setNews(items);
+      
+      const filtered = items.filter(item => 
+        item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        item.content.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      
+      setNews(filtered);
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'news');
     } finally {
@@ -345,7 +354,7 @@ export default function App() {
   };
 
   const shareOnFacebook = (id: string, title: string) => {
-    const url = `${window.location.origin}/?id=${id}`;
+    const url = `${window.location.origin}${window.location.pathname}?id=${id}`;
     const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(title)}`;
     window.open(fbUrl, '_blank');
   };
@@ -358,8 +367,53 @@ export default function App() {
 
   const handleGoBack = () => {
     setActiveNewsId(null);
-    window.history.pushState({}, '', window.location.origin);
+    window.history.pushState({}, '', window.location.pathname);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSpeech = (text: string) => {
+    if (!('speechSynthesis' in window)) {
+      alert("দুঃখিত, আপনার ব্রাউজার এই সুবিধাটি সমর্থন করে না।");
+      return;
+    }
+
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+
+    // Strip HTML tags and normalize text
+    const cleanText = text.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ');
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    
+    // Find Bengali voice
+    let voices = window.speechSynthesis.getVoices();
+    
+    const speak = (vcs: SpeechSynthesisVoice[]) => {
+      const bnVoice = vcs.find(v => v.lang.includes('bn') || v.lang.includes('BN'));
+      if (bnVoice) utterance.voice = bnVoice;
+      
+      utterance.lang = 'bn-BD';
+      utterance.rate = 0.9; 
+      utterance.pitch = 1;
+      
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+
+      window.speechSynthesis.speak(utterance);
+    };
+
+    if (voices.length === 0) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        voices = window.speechSynthesis.getVoices();
+        speak(voices);
+        window.speechSynthesis.onvoiceschanged = null;
+      };
+    } else {
+      speak(voices);
+    }
   };
 
   const filteredNews = activeNewsId ? news.filter(n => n.id === activeNewsId) : news;
@@ -639,6 +693,19 @@ export default function App() {
                           </audio>
                         </div>
                       )}
+                      
+                      {/* Text to Speech Button */}
+                      <button 
+                        onClick={() => handleSpeech(item.title + ". " + item.content)}
+                        className={`w-full mb-8 py-4 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all border-2 ${
+                          isSpeaking 
+                            ? 'bg-red-50 text-red-600 border-red-200' 
+                            : 'bg-white text-slate-700 border-slate-200 hover:border-red-600 hover:text-red-600'
+                        }`}
+                      >
+                        <Volume2 size={24} className={isSpeaking ? 'animate-pulse' : ''} />
+                        {isSpeaking ? 'পড়া বন্ধ করুন' : 'খবরটি পড়ে শুনুন (AI)'}
+                      </button>
 
                       <div className="content-segmented">
                         {renderSegmentedContent(item.content)}
