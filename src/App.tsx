@@ -33,8 +33,9 @@ import {
   ShieldCheck,
   LayoutDashboard,
   Sparkles,
-  Copy,
-  Facebook
+  Link as LinkIcon,
+  Check,
+  Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI } from "@google/genai";
@@ -82,6 +83,7 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesisUtterance | null>(null);
 
   // Sync activeNewsId with URL params on mount
@@ -353,10 +355,23 @@ export default function App() {
     }
   };
 
-  const shareOnFacebook = (id: string, title: string) => {
+  const handleCopyLink = (id: string) => {
     const url = `${window.location.origin}${window.location.pathname}?id=${id}`;
-    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(title)}`;
-    window.open(fbUrl, '_blank');
+    navigator.clipboard.writeText(url).then(() => {
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    }).catch(err => {
+      console.error('Failed to copy: ', err);
+      // Fallback for older browsers
+      const textArea = document.createElement("textarea");
+      textArea.value = url;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    });
   };
 
   const handleOpenNews = (id: string) => {
@@ -694,18 +709,32 @@ export default function App() {
                         </div>
                       )}
                       
-                      {/* Text to Speech Button */}
-                      <button 
-                        onClick={() => handleSpeech(item.title + ". " + item.content)}
-                        className={`w-full mb-8 py-4 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all border-2 ${
-                          isSpeaking 
-                            ? 'bg-red-50 text-red-600 border-red-200' 
-                            : 'bg-white text-slate-700 border-slate-200 hover:border-red-600 hover:text-red-600'
-                        }`}
-                      >
-                        <Volume2 size={24} className={isSpeaking ? 'animate-pulse' : ''} />
-                        {isSpeaking ? 'পড়া বন্ধ করুন' : 'খবরটি পড়ে শুনুন (AI)'}
-                      </button>
+                      <div className="flex gap-4 mb-8">
+                        {/* Text to Speech Button */}
+                        <button 
+                          onClick={() => handleSpeech(item.title + ". " + item.content)}
+                          className={`flex-1 py-4 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all border-2 ${
+                            isSpeaking 
+                              ? 'bg-red-50 text-red-600 border-red-200' 
+                              : 'bg-white text-slate-700 border-slate-200 hover:border-red-600 hover:text-red-600'
+                          }`}
+                        >
+                          <Volume2 size={24} className={isSpeaking ? 'animate-pulse' : ''} />
+                          {isSpeaking ? 'পড়া বন্ধ করুন' : 'খবরটি শুনুন'}
+                        </button>
+
+                        {/* Copy Link Button */}
+                        <button 
+                          onClick={() => handleCopyLink(item.id)}
+                          className={`px-6 py-4 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all border-2 ${
+                            copySuccess 
+                              ? 'bg-green-50 text-green-600 border-green-200' 
+                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-800'
+                          }`}
+                        >
+                          {copySuccess ? <div className="flex items-center gap-2 tracking-tight"><Check size={20} /> কপি হয়েছে</div> : <div className="flex items-center gap-2"><LinkIcon size={20} /> লিঙ্ক কপি</div>}
+                        </button>
+                      </div>
 
                       <div className="content-segmented">
                         {renderSegmentedContent(item.content)}
@@ -742,12 +771,12 @@ export default function App() {
                       <div className="flex items-center justify-between pt-6 border-t border-slate-50 mt-8">
                         <div className="flex gap-4">
                           <button 
-                            onClick={() => shareOnFacebook(item.id, item.title)}
-                            className="flex items-center gap-2 text-[#1877F2] font-semibold text-sm hover:underline focus-visible:ring-2 focus-visible:ring-blue-100 rounded p-1 outline-none"
-                            aria-label={`"${item.title}" খবর ফেসবুকে শেয়ার করুন`}
+                            onClick={() => handleCopyLink(item.id)}
+                            className="flex items-center gap-2 text-slate-600 font-semibold text-sm hover:text-red-600 transition-colors focus-visible:ring-2 focus-visible:ring-red-100 rounded p-1 outline-none"
+                            aria-label={`"${item.title}" খবরের লিঙ্ক কপি করুন`}
                           >
-                            <Facebook size={16} aria-hidden="true" />
-                            ফেসবুকে শেয়ার
+                            <LinkIcon size={16} aria-hidden="true" />
+                            {copySuccess ? 'কপি হয়েছে' : 'লিঙ্ক কপি'}
                           </button>
                           <button 
                             onClick={() => copyForThumbnail(item.title, item.content)}
